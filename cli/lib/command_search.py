@@ -24,7 +24,7 @@ def get_matching_docs(index: InvertedIndex, query: str, k:int) -> list[int]:
     return matches
 
 
-def search_movies(query: str, k: int):
+def cmd_search(query: str, k: int):
     index = InvertedIndex()
     try:
         index.load()

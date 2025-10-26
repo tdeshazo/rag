@@ -10,9 +10,9 @@ I created [Passage Probe](https://github.com/tdeshazo/passage-probe) as part of 
 - [x] Create an `InvertedIndex` class
 - [x] Save and load cache search index
 - [x] Wire index into search
-- [ ] Boolean search functions
-- [ ] TF-IDF
-- [ ] BM25
+- [x] TF-IDF
+- [x] BM25
 - [ ] Embeddings
 - [ ] Chunking
 - [ ] RRF
+- [ ] Define custom datasets

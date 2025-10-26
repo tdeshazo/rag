@@ -19,11 +19,11 @@ def load_movies() -> list[dict]:
     return data["movies"]
 
 
-def load_stopwords() -> frozenset[str]:
+def load_stopwords() -> list[str]:
     if not STOPWORDS_PATH.exists():
         raise FileNotFoundError("Missing data 'stopwords.txt'")
     with open(STOPWORDS_PATH, "r") as f:
-        return frozenset(f.read().splitlines())
+        return f.read().splitlines()
 
 
 def _cache_path(name: str | Path) -> Path:
