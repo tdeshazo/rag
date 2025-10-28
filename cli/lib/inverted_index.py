@@ -5,7 +5,7 @@ from typing import Any, DefaultDict
 from collections import defaultdict, Counter
 
 from .file_utils import load_movies, save_cache, load_cache
-from .search_utils import tokenize_text
+from .tokenizer import tokenize_text
 
 
 class InvertedIndex:

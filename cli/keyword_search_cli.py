@@ -1,7 +1,7 @@
 import argparse
 from typing import Optional
 
-from lib import (
+from lib.cmds import (
     cmd_build,
     DEFAULT_SEARCH_LIMIT,
     cmd_search,

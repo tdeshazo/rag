@@ -6,7 +6,7 @@ from nltk.stem import PorterStemmer
 
 from .file_utils import load_stopwords
 
-BM25_K1 = 1.5
+
 _PUNCT_TABLE = str.maketrans('', '', string.punctuation)
 _STOPWORDS: list[str] = load_stopwords()
 
