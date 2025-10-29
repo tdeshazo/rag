@@ -7,8 +7,7 @@ from .tokenizer import tokenize_text
 from .inverted_index import InvertedIndex
 
 
-DEFAULT_SEARCH_LIMIT = 5
-BM25_K1 = 1.5
+DEFAULT_SEARCH_LIMIT = 1
 
 
 def cmd_build() -> None:
@@ -99,6 +98,15 @@ def cmd_bm25_idf(term: str) -> None:
         term,
         lambda idx, t: idx.get_bm25_idf(t),
         fmt="BM25 IDF score of '{term}': {value:.2f}",
+    )
+
+
+def cmd_bm25_tf(doc_id: int, term: str, k1: int, b: int) -> None:
+        _run_with_index_and_term(
+        term,
+        lambda idx, t: idx.get_bm25_tf(doc_id, t, k1, b),
+        fmt="BM25 TF score of '{term}' in document '{doc_id}': {value:.2f}",
+        context={"doc_id": doc_id},
     )
 
 

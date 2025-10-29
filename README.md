@@ -11,7 +11,8 @@ I created [Passage Probe](https://github.com/tdeshazo/passage-probe) as part of 
 - [x] Save and load cache search index
 - [x] Wire index into search
 - [x] TF-IDF
-- [x] BM25
+- [x] BM25 
+- [ ] MB25 Search
 - [ ] Embeddings
 - [ ] Chunking
 - [ ] RRF

@@ -1,15 +1,21 @@
 import argparse
 from typing import Optional
 
+
 from lib.cmds import (
     cmd_build,
-    DEFAULT_SEARCH_LIMIT,
     cmd_search,
     cmd_tf,
     cmd_idf,
     cmd_tf_idf,
-    cmd_bm25_idf
+    cmd_bm25_idf,
+    cmd_bm25_tf,
+    DEFAULT_SEARCH_LIMIT
 )
+
+
+BM25_K1: float = 1.5
+BM25_B: float = 0.75
 
 
 def positive_int(value: str) -> int:
@@ -58,6 +64,15 @@ def add_bm25idf(subparsers: argparse._SubParsersAction) -> None:
     p.set_defaults(func=lambda a: cmd_bm25_idf(a.term))
 
 
+def add_bm25tf(subparsers: argparse._SubParsersAction) -> None:
+    p = subparsers.add_parser("bm25tf", help="Get BM25 TF score for a given document ID and term")
+    p.add_argument("doc_id", type=int, help="Document ID")
+    p.add_argument("term", type=str, help="Term to get BM25 TF score for")
+    p.add_argument("k1", type=float, nargs='?', default=BM25_K1, help="Tunable BM25 K1 parameter")
+    p.add_argument("b", type=float, nargs='?', default=BM25_B, help="Tunable BM25 b parameter")
+    p.set_defaults(func=lambda a: cmd_bm25_tf(a.doc_id, a.term, a.k1, a.b))
+
+
 def add_build(subparsers: argparse._SubParsersAction) -> None:
     p = subparsers.add_parser("build", help="Build the search index")
     p.set_defaults(func=lambda a: cmd_build())
@@ -80,6 +95,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_idf(subparsers)
     add_tfidf(subparsers)
     add_bm25idf(subparsers)
+    add_bm25tf(subparsers)
 
     parser.add_argument(
         "-V", "--version",

@@ -14,14 +14,22 @@ class InvertedIndex:
         self.index: DefaultDict[str, set[int]] = defaultdict(set)
         self.docmap: dict[int, Any] = {}
         self.term_frequencies: dict[int, Counter] = {}
+        self.doc_lengths: dict[int, int] = {}
 
     def __add_document(self, doc_id: int, text: str) -> None:
         """Add a document id and tokenized text to the index"""
         tokens = tokenize_text(text)
+        self.doc_lengths[doc_id] = len(tokens)
         self.term_frequencies[doc_id] = Counter()
         for token in tokens:
             self.index[token].add(doc_id)
             self.term_frequencies[doc_id][token] += 1
+
+    def __get_avg_doc_length(self) -> float:
+        lengths = list(self.doc_lengths.values())
+        if not lengths:
+            return 0.0
+        return sum(lengths) / len(lengths)
 
     def get_documents(self, term) -> list[int]:
         """Retrieve document ids matching the search term"""
@@ -41,11 +49,20 @@ class InvertedIndex:
     def get_bm25_idf(self, term: str) -> float:
         N = len(self.docmap)
         df = len(self.get_documents(term))
-        return math.log((N - df + 0.5) / (df + 0.5) + 1)        
+        return math.log((N - df + 0.5) / (df + 0.5) + 1)   
+
+    def get_bm25_tf(self, doc_id: int, term: str, k1: float, b: float) -> float:
+        avg_doc_length = self.__get_avg_doc_length()
+        doc_length = self.doc_lengths.get(doc_id, 0.0)
+        length_norm = 1 - b + b * (doc_length / avg_doc_length)
+        tf = self.get_tf(doc_id, term)
+        try:
+            return (tf * (k1 + 1)) / (tf + k1 * length_norm)
+        except ZeroDivisionError:
+            return 0.0
 
     def build(self) -> None:
         """Build the index and docmap from disk"""
-        
         movies = load_movies()
 
         for m in movies:
@@ -57,14 +74,11 @@ class InvertedIndex:
         save_cache(self.index, "index")
         save_cache(self.docmap, "docmap")
         save_cache(self.term_frequencies, "term_frequencies")
+        save_cache(self.doc_lengths, "doc_lengths")
     
     def load(self):
         """Load cached index and docmap from disk."""
-        cached_index = load_cache("index")
-        cached_docmap = load_cache("docmap")
-        cached_tf = load_cache("term_frequencies")
-
-        # Recast index as defaultdict in case unpickled as normal dict
-        self.index = defaultdict(set, cached_index)
-        self.docmap = cached_docmap
-        self.term_frequencies = cached_tf
+        self.index = defaultdict(set, load_cache("index"))
+        self.docmap = load_cache("docmap")
+        self.term_frequencies = load_cache("term_frequencies")
+        self.doc_lengths = load_cache("doc_lengths")
