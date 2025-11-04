@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import math
-from typing import Any, DefaultDict
+from typing import Any, DefaultDict, Optional
 from collections import defaultdict, Counter
 
 from .file_utils import load_movies, save_cache, load_cache
 from .tokenizer import tokenize_text
 
+
+DEFAULT_SEARCH_LIMIT: int = 5
+DEFAULT_BM25_K1: float = 1.5
+DEFAULT_BM25_B: float = 0.75
 
 class InvertedIndex:
 
@@ -31,6 +35,14 @@ class InvertedIndex:
             return 0.0
         return sum(lengths) / len(lengths)
 
+    def build(self) -> None:
+        """Build the index and docmap from disk"""
+        movies = load_movies()
+
+        for m in movies:
+            self.docmap[m['id']] = m
+            self.__add_document(m['id'], f"{m['title']} {m['description']}")
+
     def get_documents(self, term) -> list[int]:
         """Retrieve document ids matching the search term"""
         matches = sorted(list(self.index.get(term, set())))
@@ -51,34 +63,59 @@ class InvertedIndex:
         df = len(self.get_documents(term))
         return math.log((N - df + 0.5) / (df + 0.5) + 1)   
 
-    def get_bm25_tf(self, doc_id: int, term: str, k1: float, b: float) -> float:
+    def get_bm25_tf(
+        self,
+        doc_id: int,
+        term: str,
+        k1: Optional[float] = None,
+        b: Optional[float] = None
+    ) -> float:
+
+        if k1 is None: k1 = DEFAULT_BM25_K1
+        if b is None: b = DEFAULT_BM25_B
+
         avg_doc_length = self.__get_avg_doc_length()
         doc_length = self.doc_lengths.get(doc_id, 0.0)
-        length_norm = 1 - b + b * (doc_length / avg_doc_length)
+        length_norm = 1 - b + b * (doc_length / avg_doc_length if avg_doc_length else 0.0)
         tf = self.get_tf(doc_id, term)
-        try:
-            return (tf * (k1 + 1)) / (tf + k1 * length_norm)
-        except ZeroDivisionError:
+        denom = tf + k1 * length_norm
+        if denom == 0:
             return 0.0
+        return (tf * (k1 + 1)) / denom
 
-    def build(self) -> None:
-        """Build the index and docmap from disk"""
-        movies = load_movies()
+    def bm25_search(
+        self,
+        query: str,
+        *,
+        k1: Optional[float] = None,
+        b: Optional[float] = None
+    ) -> dict[int, float]:
+        scores = defaultdict(float)
+        tokens = tokenize_text(query)
+        if not tokens:
+            return []
 
-        for m in movies:
-            self.docmap[m['id']] = m
-            self.__add_document(m['id'], f"{m['title']} {m['description']}")
+        for token in tokens:
+            docs = self.get_documents(token)
+            for doc in docs:
+                tf = self.get_bm25_tf(doc, token, k1=k1, b=b)
+                idf = self.get_bm25_idf(token)
+                scores[doc] += tf * idf
+            
+        scores = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+        return dict(scores)
 
     def save(self) -> None:
         """Save index and docmap to disk cache"""
-        save_cache(self.index, "index")
-        save_cache(self.docmap, "docmap")
-        save_cache(self.term_frequencies, "term_frequencies")
-        save_cache(self.doc_lengths, "doc_lengths")
+        save_cache(self.index, "index.pkl")
+        save_cache(self.docmap, "docmap.pkl")
+        save_cache(self.term_frequencies, "term_frequencies.pkl")
+        save_cache(self.doc_lengths, "doc_lengths.pkl")
     
     def load(self):
         """Load cached index and docmap from disk."""
-        self.index = defaultdict(set, load_cache("index"))
-        self.docmap = load_cache("docmap")
-        self.term_frequencies = load_cache("term_frequencies")
-        self.doc_lengths = load_cache("doc_lengths")
+        self.index = defaultdict(set, load_cache("index.pkl"))
+        self.docmap = load_cache("docmap.pkl")
+        self.term_frequencies = load_cache("term_frequencies.pkl")
+        self.doc_lengths = load_cache("doc_lengths.pkl")
+        

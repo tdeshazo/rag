@@ -7,9 +7,6 @@ from .tokenizer import tokenize_text
 from .inverted_index import InvertedIndex
 
 
-DEFAULT_SEARCH_LIMIT = 1
-
-
 def cmd_build() -> None:
     idx = InvertedIndex()
     idx.build()
@@ -101,7 +98,7 @@ def cmd_bm25_idf(term: str) -> None:
     )
 
 
-def cmd_bm25_tf(doc_id: int, term: str, k1: int, b: int) -> None:
+def cmd_bm25_tf(doc_id: int, term: str, k1: float, b: float) -> None:
         _run_with_index_and_term(
         term,
         lambda idx, t: idx.get_bm25_tf(doc_id, t, k1, b),
@@ -109,6 +106,14 @@ def cmd_bm25_tf(doc_id: int, term: str, k1: int, b: int) -> None:
         context={"doc_id": doc_id},
     )
 
+def cmd_bm25_search(query: str, limit: int=5):
+    index = _load_existing()
+    matches = index.bm25_search(query)
+    for idx, (doc_id, score) in enumerate(matches.items()):
+        doc = index.docmap[doc_id]
+        print(f"{idx + 1}. ({doc_id}) {doc['title']} - Score: {score:.2f}" )
+        if idx + 1 == limit:
+            break
 
 def cmd_search(query: str, k: int) -> None:
     index = _load_existing()
