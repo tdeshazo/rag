@@ -1,34 +1,67 @@
-from __future__ import annotations
-
 import argparse
-from typing import Optional
 
-def add_embed_chunks(subparsers: argparse._SubParsersAction):
-    p = subparsers.add_parser("embed_chunks", help="Semantic Search CLI")
-    p.set_defaults(func=lambda a: cmd_embed_chunks())
+from lib.hybrid_search import normalize_scores, weighted_search_command
 
 
+def run_normalize(args: argparse.Namespace) -> None:
+    normalized = normalize_scores(args.scores)
+    for score in normalized:
+        print(f"* {score:.4f}")
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="kwsearch",
-        description="Keyword Search CLI",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+
+def run_weighted_search(args: argparse.Namespace) -> None:
+    result = weighted_search_command(args.query, args.alpha, args.limit)
+    print(
+        f"Weighted Hybrid Search Results for '{result['query']}' (alpha={result['alpha']}):"
     )
-    # required=True works on modern Python; fall back for older versions if needed
-    subparsers = parser.add_subparsers(
-        title="commands", dest="command", required=True
+    print(
+        f"  Alpha {result['alpha']}: {int(result['alpha'] * 100)}% Keyword, {int((1 - result['alpha']) * 100)}% Semantic"
     )
+    for i, res in enumerate(result["results"], 1):
+        print(f"{i}. {res['title']}")
+        print(f"   Hybrid Score: {res.get('score', 0):.3f}")
+        metadata = res.get("metadata", {})
+        if "bm25_score" in metadata and "semantic_score" in metadata:
+            print(
+                f"   BM25: {metadata['bm25_score']:.3f}, Semantic: {metadata['semantic_score']:.3f}"
+            )
+        print(f"   {res['document'][:100]}...")
+        print()
 
 
-def main(argv: Optional[list[str]] = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Hybrid Search CLI")
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # Each subcommand sets a .func; calling it performs the action
-    result = args.func(args)
-    return 0 if result is None else int(bool(result))
+    normalize_parser = subparsers.add_parser(
+        "normalize", help="Normalize a list of scores"
+    )
+    normalize_parser.add_argument(
+        "scores", nargs="+", type=float, help="List of scores to normalize"
+    )
+    normalize_parser.set_defaults(func=run_normalize)
+
+    weighted_parser = subparsers.add_parser(
+        "weighted-search", help="Perform weighted hybrid search"
+    )
+    weighted_parser.add_argument("query", type=str, help="Search query")
+    weighted_parser.add_argument(
+        "--alpha",
+        type=float,
+        default=0.5,
+        help="Weight for BM25 vs semantic (0=all semantic, 1=all BM25, default=0.5)",
+    )
+    weighted_parser.add_argument(
+        "--limit", type=int, default=5, help="Number of results to return (default=5)"
+    )
+    weighted_parser.set_defaults(func=run_weighted_search)
+
+    args = parser.parse_args()
+    if hasattr(args, "func"):
+        args.func(args)
+    else:
+        parser.print_help()
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

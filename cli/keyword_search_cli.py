@@ -1,121 +1,129 @@
+#!/usr/bin/env python3
+
 import argparse
-from typing import Optional
 
-from lib.defaults import (
-    DEFAULT_SEARCH_LIMIT, DEFAULT_BM25_K1, DEFAULT_BM25_B
+from lib.keyword_search import (
+    bm25_idf_command,
+    bm25_tf_command,
+    bm25search_command,
+    build_command,
+    idf_command,
+    search_command,
+    tf_command,
+    tfidf_command,
 )
-from cli.lib.kw_cmds import (
-    cmd_build,
-    cmd_search,
-    cmd_tf,
-    cmd_idf,
-    cmd_tf_idf,
-    cmd_bm25_idf,
-    cmd_bm25_tf,
-    cmd_bm25_search,
-)
+from lib.search_utils import BM25_B, BM25_K1
 
 
-def positive_int(value: str) -> int:
-    n = int(value)
-    if n <= 0:
-        raise argparse.ArgumentTypeError("must be a positive integer")
-    return n
+def run_build(_: argparse.Namespace) -> None:
+    print("Building inverted index...")
+    build_command()
+    print("Inverted index built successfully.")
 
 
-def add_search(subparsers: argparse._SubParsersAction) -> None:
-    p = subparsers.add_parser("search", help="BM25 search over movies")
-    p.add_argument("query", type=str, help="Search query string")
-    p.add_argument(
-        "-k", "--limit",
-        type=positive_int,
-        default=DEFAULT_SEARCH_LIMIT,
-        metavar="N",
-        help="Number of results to return",
+def run_search(args: argparse.Namespace) -> None:
+    print("Searching for:", args.query)
+    results = search_command(args.query)
+    for i, res in enumerate(results, 1):
+        print(f"{i}. ({res['id']}) {res['title']}")
+
+
+def run_tf(args: argparse.Namespace) -> None:
+    tf = tf_command(args.doc_id, args.term)
+    print(f"Term frequency of '{args.term}' in document '{args.doc_id}': {tf}")
+
+
+def run_idf(args: argparse.Namespace) -> None:
+    idf = idf_command(args.term)
+    print(f"Inverse document frequency of '{args.term}': {idf:.2f}")
+
+
+def run_tfidf(args: argparse.Namespace) -> None:
+    tf_idf = tfidf_command(args.doc_id, args.term)
+    print(f"TF-IDF score of '{args.term}' in document '{args.doc_id}': {tf_idf:.2f}")
+
+
+def run_bm25idf(args: argparse.Namespace) -> None:
+    bm25idf = bm25_idf_command(args.term)
+    print(f"BM25 IDF score of '{args.term}': {bm25idf:.2f}")
+
+
+def run_bm25tf(args: argparse.Namespace) -> None:
+    bm25tf = bm25_tf_command(args.doc_id, args.term, args.k1, args.b)
+    print(f"BM25 TF score of '{args.term}' in document '{args.doc_id}': {bm25tf:.2f}")
+
+
+def run_bm25search(args: argparse.Namespace) -> None:
+    print("Searching for:", args.query)
+    results = bm25search_command(args.query)
+    for i, res in enumerate(results, 1):
+        print(f"{i}. ({res['id']}) {res['title']} - Score: {res['score']:.2f}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Keyword Search CLI")
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    build_parser = subparsers.add_parser("build", help="Build the inverted index")
+    build_parser.set_defaults(func=run_build)
+
+    search_parser = subparsers.add_parser("search", help="Search movies using BM25")
+    search_parser.add_argument("query", type=str, help="Search query")
+    search_parser.set_defaults(func=run_search)
+
+    tf_parser = subparsers.add_parser(
+        "tf", help="Get term frequency for a given document ID and term"
     )
-    p.set_defaults(func=lambda a: cmd_search(a.query, k=a.limit))
+    tf_parser.add_argument("doc_id", type=int, help="Document ID")
+    tf_parser.add_argument("term", type=str, help="Term to get frequency for")
+    tf_parser.set_defaults(func=run_tf)
 
-
-def add_tf(subparsers: argparse._SubParsersAction) -> None:
-    p = subparsers.add_parser("tf", help="Term frequency for a document")
-    p.add_argument("doc_id", type=int, help="Document ID")
-    p.add_argument("term", type=str, help="Term to look up")
-    p.set_defaults(func=lambda a: cmd_tf(a.doc_id, a.term))
-
-
-def add_idf(subparsers: argparse._SubParsersAction) -> None:
-    p = subparsers.add_parser("idf", help="Inverse document frequency of a term")
-    p.add_argument("term", type=str, help="Term to look up")
-    p.set_defaults(func=lambda a: cmd_idf(a.term))
-
-
-def add_tfidf(subparsers: argparse._SubParsersAction) -> None:
-    p = subparsers.add_parser("tfidf", help="TF-IDF of a term in a document")
-    p.add_argument("doc_id", type=int, help="Document ID")
-    p.add_argument("term", type=str, help="Term to look up")
-    p.set_defaults(func=lambda a: cmd_tf_idf(a.doc_id, a.term))
-
-
-def add_bm25idf(subparsers: argparse._SubParsersAction) -> None:
-    p = subparsers.add_parser("bm25idf", help="Get BM25 IDF score for a given term")
-    p.add_argument("term", type=str, help="Term to get BM25 IDF score for")
-    p.set_defaults(func=lambda a: cmd_bm25_idf(a.term))
-
-
-def add_bm25tf(subparsers: argparse._SubParsersAction) -> None:
-    p = subparsers.add_parser("bm25tf", help="Get BM25 TF score for a given document ID and term")
-    p.add_argument("doc_id", type=int, help="Document ID")
-    p.add_argument("term", type=str, help="Term to get BM25 TF score for")
-    p.add_argument("k1", type=float, nargs='?', default=DEFAULT_BM25_K1, help="Tunable BM25 K1 parameter")
-    p.add_argument("b", type=float, nargs='?', default=DEFAULT_BM25_B, help="Tunable BM25 b parameter")
-    p.set_defaults(func=lambda a: cmd_bm25_tf(a.doc_id, a.term, a.k1, a.b))
-
-def add_bm25search(subparsers: argparse._SubParsersAction) -> None:
-    p = subparsers.add_parser("bm25search", help="Search movies using full BM25 scoring")
-    p.add_argument("query", type=str, help="Search query")
-    p.set_defaults(func=lambda a: cmd_bm25_search(a.query))
-
-def add_build(subparsers: argparse._SubParsersAction) -> None:
-    p = subparsers.add_parser("build", help="Build the search index")
-    p.set_defaults(func=lambda a: cmd_build())
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="kwsearch",
-        description="Keyword Search CLI",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    idf_parser = subparsers.add_parser(
+        "idf", help="Get inverse document frequency for a given term"
     )
-    # required=True works on modern Python; fall back for older versions if needed
-    subparsers = parser.add_subparsers(
-        title="commands", dest="command", required=True
+    idf_parser.add_argument("term", type=str, help="Term to get IDF for")
+    idf_parser.set_defaults(func=run_idf)
+
+    tf_idf_parser = subparsers.add_parser(
+        "tfidf", help="Get TF-IDF score for a given document ID and term"
     )
+    tf_idf_parser.add_argument("doc_id", type=int, help="Document ID")
+    tf_idf_parser.add_argument("term", type=str, help="Term to get TF-IDF score for")
+    tf_idf_parser.set_defaults(func=run_tfidf)
 
-    add_build(subparsers)
-    add_search(subparsers)
-    add_tf(subparsers)
-    add_idf(subparsers)
-    add_tfidf(subparsers)
-    add_bm25idf(subparsers)
-    add_bm25tf(subparsers)
-    add_bm25search(subparsers)
-
-    parser.add_argument(
-        "-V", "--version",
-        action="version",
-        version="kwsearch 1.0.0",
+    bm25_idf_parser = subparsers.add_parser(
+        "bm25idf", help="Get BM25 IDF score for a given term"
     )
-    return parser
+    bm25_idf_parser.add_argument(
+        "term", type=str, help="Term to get BM25 IDF score for"
+    )
+    bm25_idf_parser.set_defaults(func=run_bm25idf)
 
+    bm25_tf_parser = subparsers.add_parser(
+        "bm25tf", help="Get BM25 TF score for a given document ID and term"
+    )
+    bm25_tf_parser.add_argument("doc_id", type=int, help="Document ID")
+    bm25_tf_parser.add_argument("term", type=str, help="Term to get BM25 TF score for")
+    bm25_tf_parser.add_argument(
+        "k1", type=float, nargs="?", default=BM25_K1, help="Tunable BM25 K1 parameter"
+    )
+    bm25_tf_parser.add_argument(
+        "b", type=float, nargs="?", default=BM25_B, help="Tunable BM25 b parameter"
+    )
+    bm25_tf_parser.set_defaults(func=run_bm25tf)
 
-def main(argv: Optional[list[str]] = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    
-    # Each subcommand sets a .func; calling it performs the action
-    result = args.func(args)
-    return 0 if result is None else int(bool(result))
+    bm25search_parser = subparsers.add_parser(
+        "bm25search", help="Search movies using full BM25 scoring"
+    )
+    bm25search_parser.add_argument("query", type=str, help="Search query")
+    bm25search_parser.set_defaults(func=run_bm25search)
+
+    args = parser.parse_args()
+    if hasattr(args, "func"):
+        args.func(args)
+    else:
+        parser.print_help()
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

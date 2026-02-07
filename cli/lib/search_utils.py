@@ -1,42 +1,81 @@
-from __future__ import annotations
-
 import json
+import os
 import pickle
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DATA_PATH = PROJECT_ROOT / "data" / "movies.json"
-STOPWORDS_PATH = PROJECT_ROOT / "data" / "stopwords.txt"
-CACHE_DIR = PROJECT_ROOT / "cache"
+DEFAULT_ALPHA = 0.5
+
+DEFAULT_SEARCH_LIMIT = 5
+DOCUMENT_PREVIEW_LENGTH = 100
+SCORE_PRECISION = 3
+
+BM25_K1 = 1.5
+BM25_B = 0.75
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+DATA_PATH = os.path.join(PROJECT_ROOT, "data", "movies.json")
+STOPWORDS_PATH = os.path.join(PROJECT_ROOT, "data", "stopwords.txt")
+
+CACHE_DIR = os.path.join(PROJECT_ROOT, "cache")
+
+DEFAULT_CHUNK_SIZE = 200
+DEFAULT_CHUNK_OVERLAP = 1
+DEFAULT_SEMANTIC_CHUNK_SIZE = 4
+
+MOVIE_EMBEDDINGS_PATH = os.path.join(CACHE_DIR, "movie_embeddings.npy")
+CHUNK_EMBEDDINGS_PATH = os.path.join(CACHE_DIR, "chunk_embeddings.npy")
+CHUNK_METADATA_PATH = os.path.join(CACHE_DIR, "chunk_metadata.json")
 
 
 def load_movies() -> list[dict]:
-    if not DATA_PATH.exists():
-        raise FileNotFoundError("Missing data 'movies.json'")
     with open(DATA_PATH, "r") as f:
         data = json.load(f)
     return data["movies"]
 
 
 def load_stopwords() -> list[str]:
-    if not STOPWORDS_PATH.exists():
-        raise FileNotFoundError("Missing data 'stopwords.txt'")
     with open(STOPWORDS_PATH, "r") as f:
         return f.read().splitlines()
 
 
-def _cache_path(name: str | Path) -> Path:
+def format_search_result(
+    doc_id: str, title: str, document: str, score: float, **metadata: Any
+) -> dict[str, Any]:
+    """Create standardized search result
+
+    Args:
+        doc_id: Document ID
+        title: Document title
+        document: Display text (usually short description)
+        score: Relevance/similarity score
+        **metadata: Additional metadata to include
+
+    Returns:
+        Dictionary representation of search result
+    """
+    return {
+        "id": doc_id,
+        "title": title,
+        "document": document,
+        "score": round(score, SCORE_PRECISION),
+        "metadata": metadata if metadata else {},
+    }
+
+def _cache_path(name: str | os.PathLike[str]) -> Path:
     """
     Internal helper: normalize a cache key or filename
     to a full path like <PROJECT_ROOT>/cache/<name>.pkl
     """
-    # Accept either bare key "tfidf" or full path
-
     p = Path(name)
-    return CACHE_DIR / p.name
+    if not p.suffix:
+        p = p.with_suffix(".pkl")
+    if p.is_absolute():
+        return p
+    return Path(CACHE_DIR) / p.name
+
 
 def _save_pkl(obj: Any, path: Path) -> None:
     with open(path, "wb") as f:
@@ -68,7 +107,7 @@ def _load_json(path: Path) -> dict[str, Any]:
     return data
 
 
-def save_cache(obj: Any, name: str | Path) -> Path:
+def save_cache(obj: Any, name: str | os.PathLike[str]) -> str:
     """
     Serialize obj to pickle in CACHE_DIR.
 
@@ -88,10 +127,10 @@ def save_cache(obj: Any, name: str | Path) -> Path:
             _save_json(obj, path)
         case _:
             raise ValueError
-    return path
+    return str(path)
     
 
-def load_cache(name: str | Path, *, force: bool=False) -> Any:
+def load_cache(name: str | os.PathLike[str], *, force: bool = False) -> Any:
     """
     Load and return a cached pickle object from CACHE_DIR.
 
@@ -112,4 +151,3 @@ def load_cache(name: str | Path, *, force: bool=False) -> Any:
             return _load_json(path)
         case _:
             return None
-            
