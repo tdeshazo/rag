@@ -1,6 +1,6 @@
 import argparse
 
-from lib.hybrid_search import normalize_scores, weighted_search_command
+from lib.hybrid_search import normalize_scores, weighted_search_command, rrf_search_command
 
 
 def run_normalize(args: argparse.Namespace) -> None:
@@ -24,6 +24,23 @@ def run_weighted_search(args: argparse.Namespace) -> None:
         if "bm25_score" in metadata and "semantic_score" in metadata:
             print(
                 f"   BM25: {metadata['bm25_score']:.3f}, Semantic: {metadata['semantic_score']:.3f}"
+            )
+        print(f"   {res['document'][:100]}...")
+        print()
+
+
+def run_rrf_search(args: argparse.Namespace) -> None:
+    result = rrf_search_command(args.query, args.k, args.limit)
+    print(
+        f"Weighted Hybrid Search Results for '{result['query']}' (k={result['k']}):"
+    )
+    for i, res in enumerate(result["results"], 1):
+        print(f"{i}. {res['title']}")
+        print(f"   RRF Score: {res.get('score', 0):.3f}")
+        metadata = res.get("metadata", {})
+        if "bm25_score" in metadata and "semantic_score" in metadata:
+            print(
+                f"   BM25 Rank: {metadata['bm25_score']}, Semantic Rank: {metadata['semantic_score']}"
             )
         print(f"   {res['document'][:100]}...")
         print()
@@ -55,6 +72,21 @@ def main() -> None:
         "--limit", type=int, default=5, help="Number of results to return (default=5)"
     )
     weighted_parser.set_defaults(func=run_weighted_search)
+    
+    rrf_parser = subparsers.add_parser(
+        "rrf-search", help="Perform RRF hybrid search"
+    )
+    rrf_parser.add_argument("query", type=str, help="Search query")
+    rrf_parser.add_argument(
+        "--k",
+        type=float,
+        default=60.0,
+        help="K-Value for RRF",
+    )
+    rrf_parser.add_argument(
+        "--limit", type=int, default=5, help="Number of results to return (default=5)"
+    )
+    rrf_parser.set_defaults(func=run_rrf_search)
 
     args = parser.parse_args()
     if hasattr(args, "func"):

@@ -42,8 +42,12 @@ class HybridSearch:
         return combined[:limit]
 
     def rrf_search(self, query: str, k: int, limit: int = 10) -> list[dict]:
-        raise NotImplementedError("RRF hybrid search is not implemented yet.")
+        bm25_results = self._bm25_search(query, limit * 500)
+        semantic_results = self.semantic_search.search_chunks(query, limit * 500)
 
+        combined = fuse_search_results(bm25_results, semantic_results, k)
+        return combined[:limit]
+        
 
 def normalize_scores(scores: list[float]) -> list[float]:
     if not scores:
@@ -120,8 +124,7 @@ def combine_search_results(
         hybrid_results.append(result)
 
     return sorted(hybrid_results, key=lambda x: x["score"], reverse=True)
-
-# ----- CLI COMMANDS -----
+    
 
 def weighted_search_command(
     query: str, alpha: float = DEFAULT_ALPHA, limit: int = DEFAULT_SEARCH_LIMIT
@@ -138,5 +141,75 @@ def weighted_search_command(
         "original_query": original_query,
         "query": query,
         "alpha": alpha,
+        "results": results,
+    }
+
+
+def rrf_score(rank, k=60):
+    return 1 / (k + rank)
+
+def rank_search_results(results: list[dict], k = 60) -> list[dict]:
+    for i, result in enumerate(results, start=1):
+        result["rank"] = rrf_score(i, k)
+
+
+def fuse_search_results(
+    bm25_results: list[dict], semantic_results: list[dict], k: float = 60
+) -> list[dict]:
+    combined_ranks: dict[int, HybridAccumulator] = {}
+
+    for i, result in enumerate(bm25_results, start=1):
+        doc_id = result["id"]
+        if doc_id not in combined_ranks:
+            combined_ranks[doc_id] = HybridAccumulator(
+                title=result["title"],
+                document=result["document"],
+            )
+        combined_ranks[doc_id].bm25_score = max(
+            combined_ranks[doc_id].bm25_score, i
+        )
+
+    for i, result in enumerate(semantic_results, start=1):
+        doc_id = result["id"]
+        if doc_id not in combined_ranks:
+            combined_ranks[doc_id] = HybridAccumulator(
+                title=result["title"],
+                document=result["document"],
+            )
+        combined_ranks[doc_id].semantic_score = max(
+            combined_ranks[doc_id].semantic_score, i
+        )
+
+    fused_results = []
+    for doc_id, data in combined_ranks.items():
+        score_value = rrf_score(data.bm25_score,k) + rrf_score(data.semantic_score,k)
+        result = format_search_result(
+            doc_id=doc_id,
+            title=data.title,
+            document=data.document,
+            score=score_value,
+            bm25_score=data.bm25_score,
+            semantic_score=data.semantic_score,
+        )
+        fused_results.append(result)
+
+    return sorted(fused_results, key=lambda x: x["score"], reverse=True)
+
+
+def rrf_search_command(
+    query: str, k: float = 60, limit: int = DEFAULT_SEARCH_LIMIT
+) -> dict:
+    movies = load_movies()
+    searcher = HybridSearch(movies)
+
+    original_query = query
+
+    search_limit = limit
+    results = searcher.rrf_search(query, k, search_limit)
+
+    return {
+        "original_query": original_query,
+        "query": query,
+        "k": k,
         "results": results,
     }
