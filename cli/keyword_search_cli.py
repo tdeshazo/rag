@@ -1,7 +1,7 @@
 import argparse
 from typing import Optional
 
-from lib.inverted_index import (
+from lib.defaults import (
     DEFAULT_SEARCH_LIMIT, DEFAULT_BM25_K1, DEFAULT_BM25_B
 )
 from cli.lib.kw_cmds import (

@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 import argparse
+import logging
 from typing import Optional
 
 from lib.sem_cmds import (
     verify_model, embed_text, verify_embeddings, embed_query_text, search,
-    cmd_word_chunk, cmd_sentence_chunk
+    cmd_word_chunk, cmd_sentence_chunk, cmd_embed_chunks, cmd_search_chunks
 )
-
 
 def positive_int(value: str) -> int:
     n = int(value)
@@ -66,7 +68,9 @@ def add_chunk(subparsers: argparse._SubParsersAction) -> None:
         metavar="N",
         help="Number of words to overlap",
     )
-    p.set_defaults(func=lambda a: cmd_word_chunk(a.text, a.chunk_size, a.overlap))
+    p.set_defaults(func=lambda a: cmd_word_chunk(
+        a.text, a.chunk_size, a.overlap))
+
 
 def add_semantic_chunk(subparsers: argparse._SubParsersAction) -> None:
     p = subparsers.add_parser("semantic_chunk", help="Chunk text")
@@ -85,13 +89,39 @@ def add_semantic_chunk(subparsers: argparse._SubParsersAction) -> None:
         metavar="N",
         help="Number of words to overlap",
     )
-    p.set_defaults(func=lambda a: cmd_sentence_chunk(a.text, a.max_chunk_size, a.overlap))
+    p.set_defaults(func=lambda a: cmd_sentence_chunk(
+        a.text, a.max_chunk_size, a.overlap))
+
+
+def add_embed_chunks(subparsers: argparse._SubParsersAction):
+    p = subparsers.add_parser("embed_chunks", help="Semantic Search CLI")
+    p.set_defaults(func=lambda a: cmd_embed_chunks())
+
+
+def add_search_chunks(subparsers: argparse._SubParsersAction) -> None:
+    p = subparsers.add_parser("search_chunked", help="Create text embeddings")
+    p.add_argument("query", type=str)
+    p.add_argument(
+        "--limit",
+        type=positive_int,
+        default=5,
+        metavar="N",
+        help="Number of results to return",
+    )
+    p.set_defaults(func=lambda a: cmd_search_chunks(a.query, a.limit))
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         # prog="semanticsearch",
         description="Keyword Search CLI",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "-d",
+        "--debug",
+        action="store_true",
+        help="Enable debug logging",
     )
     # required=True works on modern Python; fall back for older versions if needed
     subparsers = parser.add_subparsers(
@@ -104,6 +134,8 @@ def build_parser() -> argparse.ArgumentParser:
     add_search(subparsers)
     add_chunk(subparsers)
     add_semantic_chunk(subparsers)
+    add_embed_chunks(subparsers)
+    add_search_chunks(subparsers)
 
     parser.add_argument(
         "-V", "--version",
@@ -116,6 +148,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.debug:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(levelname)s:%(name)s:%(message)s",
+        )
 
     # Each subcommand sets a .func; calling it performs the action
     result = args.func(args)

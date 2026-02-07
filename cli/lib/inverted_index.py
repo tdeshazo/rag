@@ -4,13 +4,9 @@ import math
 from typing import Any, DefaultDict, Optional
 from collections import defaultdict, Counter
 
+from .defaults import DEFAULT_BM25_K1, DEFAULT_BM25_B
 from .file_utils import load_movies, save_cache, load_cache
 from .tokenizer import tokenize_text
-
-
-DEFAULT_SEARCH_LIMIT: int = 5
-DEFAULT_BM25_K1: float = 1.5
-DEFAULT_BM25_B: float = 0.75
 
 class InvertedIndex:
 

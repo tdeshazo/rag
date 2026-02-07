@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import pickle
-from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -35,7 +34,7 @@ def _cache_path(name: str | Path) -> Path:
     to a full path like <PROJECT_ROOT>/cache/<name>.pkl
     """
     # Accept either bare key "tfidf" or full path
-        
+
     p = Path(name)
     return CACHE_DIR / p.name
 

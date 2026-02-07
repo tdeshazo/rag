@@ -1,9 +1,11 @@
 import re
 from textwrap import shorten
-from typing import Callable, Any, Optional, Dict
+from typing import Callable, Optional
 
+from .defaults import DEFAULT_MODEL, DEFAULT_SEARCH_LIMIT
 from .file_utils import load_movies
-from .semantic_search import SemanticSearch, DEFAULT_MODEL
+from .semantic_search import SemanticSearch
+from .chunked_semantic_search import ChunkedSemanticSearch
 
 
 def verify_model(model: str = DEFAULT_MODEL) -> None:
@@ -67,7 +69,6 @@ def search(query: str, limit: int = 5):
         print(f"   {desc_line}")
         if i < len(results):
             print()
-
     return
 
 
@@ -100,10 +101,45 @@ def cmd_word_chunk(text: str, max_chunk_size: int = 4, overlap: int = 0):
 
  
 def cmd_sentence_chunk(text: str, max_chunk_size: int = 4, overlap: int = 0):
-    return _chunk(
-        text,
-        split=lambda t: re.split(r"(?<=[.!?])\s+", t),
-        max_chunk_size=max_chunk_size,
-        overlap=overlap,
-        fmt="Semantically chunking {chars} characters:",
+    # return _chunk(
+    #     text,
+    #     split=lambda t: re.split(r"(?<=[.!?])\s+", t),
+    #     max_chunk_size=max_chunk_size,
+    #     overlap=overlap,
+    #     fmt="Semantically chunking {chars} characters:",
+    # )
+    chunks = ChunkedSemanticSearch.chunk(
+        text, max_chunk_size, overlap
     )
+    print(f"Semantically chunking {len(text)} characters:")
+    for i, line in enumerate(chunks, start=1):
+        print(f"{i}. {line}")
+
+
+def cmd_embed_chunks() -> None:
+    documents = load_movies()
+    cs = ChunkedSemanticSearch()
+    embeddings = cs.load_or_create_embeddings(documents)
+    print(f"Generated {len(embeddings)} chunked embeddings")
+
+
+def cmd_search_chunks(query: str, limit: int = DEFAULT_SEARCH_LIMIT):
+    documents = load_movies()
+    st = ChunkedSemanticSearch()
+    st.load_or_create_embeddings(documents)
+    results = st.search(query, limit)
+
+    for i, r in enumerate(results, start=1):
+        title = r.get("title", "")
+        score = float(r.get("score", 0.0))
+        description = r.get("description", "") or ""
+        # Normalize whitespace and truncate with an ellipsis
+        desc_line = " ".join(description.split())
+        desc_line = shorten(desc_line, width=120, placeholder="...")
+
+        print(f"{i}. {title} (score: {score:.4f})")
+        print(f"   {desc_line}")
+        if i < len(results):
+            print()
+    return
+
