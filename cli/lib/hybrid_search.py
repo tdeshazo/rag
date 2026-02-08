@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 from dataclasses import dataclass
 
@@ -20,6 +22,8 @@ class HybridAccumulator:
 
 
 class HybridSearch:
+    __slots__ = ("documents", "semantic_search", "idx")
+
     def __init__(self, documents: list[dict]) -> None:
         self.documents = documents
         self.semantic_search = ChunkedSemanticSearch()
@@ -36,18 +40,23 @@ class HybridSearch:
 
     def weighted_search(self, query: str, alpha: float, limit: int = 5) -> list[dict]:
         bm25_results = self._bm25_search(query, limit * 500)
-        semantic_results = self.semantic_search.search_chunks(query, limit * 500)
+        semantic_results = self.semantic_search.search_chunks(
+            query, limit * 500)
 
-        combined = combine_search_results(bm25_results, semantic_results, alpha)
+        combined = combine_search_results(
+            bm25_results, semantic_results, alpha)
         return combined[:limit]
 
     def rrf_search(self, query: str, k: int, limit: int = 10) -> list[dict]:
         bm25_results = self._bm25_search(query, limit * 500)
-        semantic_results = self.semantic_search.search_chunks(query, limit * 500)
+        semantic_results = self.semantic_search.search_chunks(
+            query, limit * 500)
 
         combined = fuse_search_results(bm25_results, semantic_results, k)
         return combined[:limit]
-        
+
+# ===== Weighted Search Helpers =====
+
 
 def normalize_scores(scores: list[float]) -> list[float]:
     if not scores:
@@ -59,7 +68,7 @@ def normalize_scores(scores: list[float]) -> list[float]:
     if max_score == min_score:
         return [1.0] * len(scores)
 
-    norm = lambda s: (s - min_score) / (max_score - min_score)
+    def norm(s): return (s - min_score) / (max_score - min_score)
     return [norm(score) for score in scores]
 
 
@@ -124,31 +133,15 @@ def combine_search_results(
         hybrid_results.append(result)
 
     return sorted(hybrid_results, key=lambda x: x["score"], reverse=True)
-    
 
-def weighted_search_command(
-    query: str, alpha: float = DEFAULT_ALPHA, limit: int = DEFAULT_SEARCH_LIMIT
-) -> dict:
-    movies = load_movies()
-    searcher = HybridSearch(movies)
-
-    original_query = query
-
-    search_limit = limit
-    results = searcher.weighted_search(query, alpha, search_limit)
-
-    return {
-        "original_query": original_query,
-        "query": query,
-        "alpha": alpha,
-        "results": results,
-    }
+# ===== RRF Search Helpers =====
 
 
 def rrf_score(rank, k=60):
     return 1 / (k + rank)
 
-def rank_search_results(results: list[dict], k = 60) -> list[dict]:
+
+def rank_search_results(results: list[dict], k=60) -> list[dict]:
     for i, result in enumerate(results, start=1):
         result["rank"] = rrf_score(i, k)
 
@@ -182,7 +175,8 @@ def fuse_search_results(
 
     fused_results = []
     for doc_id, data in combined_ranks.items():
-        score_value = rrf_score(data.bm25_score,k) + rrf_score(data.semantic_score,k)
+        score_value = rrf_score(data.bm25_score, k) + \
+            rrf_score(data.semantic_score, k)
         result = format_search_result(
             doc_id=doc_id,
             title=data.title,
@@ -195,6 +189,50 @@ def fuse_search_results(
 
     return sorted(fused_results, key=lambda x: x["score"], reverse=True)
 
+# ===== CLI COMMANDS =====
+
+
+def normalize_command(scores: list[float]) -> list[float]:
+    normalized = normalize_scores(scores)
+    for score in normalized:
+        print(f"* {score:.4f}")
+    return normalized
+
+
+def weighted_search_command(
+    query: str, alpha: float = DEFAULT_ALPHA, limit: int = DEFAULT_SEARCH_LIMIT
+) -> dict:
+    movies = load_movies()
+    searcher = HybridSearch(movies)
+
+    original_query = query
+
+    search_limit = limit
+    results = searcher.weighted_search(query, alpha, search_limit)
+    payload = {
+        "original_query": original_query,
+        "query": query,
+        "alpha": alpha,
+        "results": results,
+    }
+    print(
+        f"Weighted Hybrid Search Results for '{payload['query']}' (alpha={payload['alpha']}):"
+    )
+    print(
+        f"  Alpha {payload['alpha']}: {int(payload['alpha'] * 100)}% Keyword, {int((1 - payload['alpha']) * 100)}% Semantic"
+    )
+    for i, res in enumerate(payload["results"], 1):
+        print(f"{i}. {res['title']}")
+        print(f"   Hybrid Score: {res.get('score', 0):.3f}")
+        metadata = res.get("metadata", {})
+        if "bm25_score" in metadata and "semantic_score" in metadata:
+            print(
+                f"   BM25: {metadata['bm25_score']:.3f}, Semantic: {metadata['semantic_score']:.3f}"
+            )
+        print(f"   {res['document'][:100]}...")
+        print()
+    return payload
+
 
 def rrf_search_command(
     query: str, k: float = 60, limit: int = DEFAULT_SEARCH_LIMIT
@@ -206,10 +244,23 @@ def rrf_search_command(
 
     search_limit = limit
     results = searcher.rrf_search(query, k, search_limit)
-
-    return {
+    payload = {
         "original_query": original_query,
         "query": query,
         "k": k,
         "results": results,
     }
+    print(
+        f"Weighted Hybrid Search Results for '{payload['query']}' (k={payload['k']}):"
+    )
+    for i, res in enumerate(payload["results"], 1):
+        print(f"{i}. {res['title']}")
+        print(f"   RRF Score: {res.get('score', 0):.3f}")
+        metadata = res.get("metadata", {})
+        if "bm25_score" in metadata and "semantic_score" in metadata:
+            print(
+                f"   BM25 Rank: {metadata['bm25_score']}, Semantic Rank: {metadata['semantic_score']}"
+            )
+        print(f"   {res['document'][:100]}...")
+        print()
+    return payload

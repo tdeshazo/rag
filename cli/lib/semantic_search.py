@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 from dataclasses import dataclass
 
@@ -13,7 +15,6 @@ from .search_utils import (
     DEFAULT_SEMANTIC_CHUNK_SIZE,
     DOCUMENT_PREVIEW_LENGTH,
     MOVIE_EMBEDDINGS_PATH,
-    format_search_result,
     load_cache,
     load_movies,
     save_cache,
@@ -45,6 +46,8 @@ class ChunkMeta:
 
 
 class SemanticSearch:
+    __slots__ = ("model", "embeddings", "documents", "document_map")
+
     def __init__(self, model_name="all-MiniLM-L6-v2"):
         self.model = SentenceTransformer(model_name)
         self.embeddings = None
@@ -55,7 +58,7 @@ class SemanticSearch:
         if not text or not text.strip():
             raise ValueError("cannot generate embedding for empty text")
         return self.model.encode([text])[0]
-    
+
     def _add_document(self, doc):
         self.docmap[doc['id']] = doc
         return f"{doc['title']}: {doc['description']}"
@@ -178,7 +181,7 @@ def fixed_size_chunking(
     n_words = len(words)
     i = 0
     while i < n_words:
-        chunk_words = words[i : i + chunk_size]
+        chunk_words = words[i: i + chunk_size]
         if chunks and len(chunk_words) <= overlap:
             break
 
@@ -206,15 +209,17 @@ def semantic_chunk(
     text = strip(text)
     if not text:
         return []
-    sentences = list(filter(None, map(str.strip, _SENTENCE_SPLIT_RE.split(text))))
-    
+    sentences = list(
+        filter(None, map(str.strip, _SENTENCE_SPLIT_RE.split(text))))
+
     n = len(sentences)
     if n == 0:
         return []
 
     step = max_chunk_size - overlap
     if step <= 0:
-        raise ValueError("overlap must be < max_chunk_size (otherwise the loop can't advance).")
+        raise ValueError(
+            "overlap must be < max_chunk_size (otherwise the loop can't advance).")
 
     chunks: list[str] = []
     append = chunks.append
@@ -245,6 +250,8 @@ def semantic_chunk_text(
 
 
 class ChunkedSemanticSearch(SemanticSearch):
+    __slots__ = ("chunk_embeddings", "chunk_metadata")
+
     def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
         super().__init__(model_name)
         self.chunk_embeddings = None
@@ -275,7 +282,8 @@ class ChunkedSemanticSearch(SemanticSearch):
                 for j in range(num_chunks)
             )
 
-        self.chunk_embeddings = self.model.encode(all_chunks, show_progress_bar=True)
+        self.chunk_embeddings = self.model.encode(
+            all_chunks, show_progress_bar=True)
         self.chunk_metadata = chunk_metadata
 
         save_cache(self.chunk_embeddings, CHUNK_EMBEDDINGS_PATH)
@@ -337,15 +345,16 @@ class ChunkedSemanticSearch(SemanticSearch):
         k = min(limit, n)
         if k == 0:
             return []
-        
+
         # Map indices to movie ids using the SAME order embeddings were built
         scores = {}
         for i, chunk in enumerate(self.chunk_metadata):
             movie_id = chunk.movie_idx
             scores[movie_id] = max(scores.get(movie_id, 0.0), float(sims[i]))
-        
+
         # Sort scores by value
-        sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        sorted_scores = sorted(
+            scores.items(), key=lambda x: x[1], reverse=True)
 
         # Add info for top k results
         results = []
@@ -363,10 +372,13 @@ class ChunkedSemanticSearch(SemanticSearch):
 
 # ----- CLI COMMANDS -----
 
+
 def embed_chunks_command() -> np.ndarray:
     movies = load_movies()
     searcher = ChunkedSemanticSearch()
-    return searcher.load_or_create_chunk_embeddings(movies)
+    embeddings = searcher.load_or_create_chunk_embeddings(movies)
+    print(f"Generated {len(embeddings)} chunked embeddings")
+    return embeddings
 
 
 def search_chunked_command(query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> dict:
@@ -374,4 +386,83 @@ def search_chunked_command(query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> dic
     searcher = ChunkedSemanticSearch()
     searcher.load_or_create_chunk_embeddings(movies)
     results = searcher.search_chunks(query, limit)
-    return {"query": query, "results": results}
+    payload = {"query": query, "results": results}
+    print(f"Query: {payload['query']}")
+    print("Results:")
+    for i, res in enumerate(payload["results"], 1):
+        preview = res.get("document", res.get("description", ""))
+        print(f"\n{i}. {res['title']} (score: {res['score']:.4f})")
+        print(f"   {preview}...")
+    return payload
+
+
+def verify_command() -> dict:
+    result = verify_model()
+    print(f"Model loaded: {result['model']}")
+    print(f"Max sequence length: {result['max_seq_length']}")
+    return result
+
+
+def embed_text_command(text: str) -> dict:
+    result = embed_text(text)
+    embedding = result["embedding"]
+    print(f"Text: {result['text']}")
+    print(f"First 3 dimensions: {embedding[:3]}")
+    print(f"Dimensions: {embedding.shape[0]}")
+    return result
+
+
+def verify_embeddings_command() -> dict:
+    result = verify_embeddings()
+    print(f"Number of docs:   {result['num_documents']}")
+    print(
+        f"Embeddings shape: {result['num_vectors']} vectors in {result['num_dimensions']} dimensions"
+    )
+    return result
+
+
+def embed_query_command(query: str) -> dict:
+    result = embed_query_text(query)
+    embedding = result["embedding"]
+    print(f"Query: {result['query']}")
+    print(f"First 5 dimensions: {embedding[:3]}")
+    print(f"Shape: {embedding.shape}")
+    return result
+
+
+def semantic_search_command(
+    query: str, limit: int = DEFAULT_SEARCH_LIMIT
+) -> dict:
+    result = semantic_search(query, limit)
+    print(f"Query: {result['query']}")
+    print(f"Top {len(result['results'])} results:")
+    print()
+    for i, item in enumerate(result["results"], 1):
+        print(f"{i}. {item['title']} (score: {item['score']:.4f})")
+        print(f"   {item['description'][:100]}...")
+        print()
+    return result
+
+
+def chunk_command(
+    text: str,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    overlap: int = DEFAULT_CHUNK_OVERLAP,
+) -> dict:
+    result = chunk_text(text, chunk_size, overlap)
+    print(f"Chunking {result['text_length']} characters")
+    for i, chunk in enumerate(result["chunks"], 1):
+        print(f"{i}. {chunk}")
+    return result
+
+
+def semantic_chunk_command(
+    text: str,
+    max_chunk_size: int = DEFAULT_SEMANTIC_CHUNK_SIZE,
+    overlap: int = DEFAULT_CHUNK_OVERLAP,
+) -> dict:
+    result = semantic_chunk_text(text, max_chunk_size, overlap)
+    print(f"Semantically chunking {result['text_length']} characters")
+    for i, chunk in enumerate(result["chunks"], 1):
+        print(f"{i}. {chunk}")
+    return result

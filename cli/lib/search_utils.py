@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import os
 import pickle
@@ -64,6 +66,7 @@ def format_search_result(
         "metadata": metadata if metadata else {},
     }
 
+
 def _cache_path(name: str | os.PathLike[str]) -> Path:
     """
     Internal helper: normalize a cache key or filename
@@ -128,7 +131,7 @@ def save_cache(obj: Any, name: str | os.PathLike[str]) -> str:
         case _:
             raise ValueError
     return str(path)
-    
+
 
 def load_cache(name: str | os.PathLike[str], *, force: bool = False) -> Any:
     """

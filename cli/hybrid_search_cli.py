@@ -1,49 +1,10 @@
 import argparse
 
-from lib.hybrid_search import normalize_scores, weighted_search_command, rrf_search_command
-
-
-def run_normalize(args: argparse.Namespace) -> None:
-    normalized = normalize_scores(args.scores)
-    for score in normalized:
-        print(f"* {score:.4f}")
-
-
-def run_weighted_search(args: argparse.Namespace) -> None:
-    result = weighted_search_command(args.query, args.alpha, args.limit)
-    print(
-        f"Weighted Hybrid Search Results for '{result['query']}' (alpha={result['alpha']}):"
-    )
-    print(
-        f"  Alpha {result['alpha']}: {int(result['alpha'] * 100)}% Keyword, {int((1 - result['alpha']) * 100)}% Semantic"
-    )
-    for i, res in enumerate(result["results"], 1):
-        print(f"{i}. {res['title']}")
-        print(f"   Hybrid Score: {res.get('score', 0):.3f}")
-        metadata = res.get("metadata", {})
-        if "bm25_score" in metadata and "semantic_score" in metadata:
-            print(
-                f"   BM25: {metadata['bm25_score']:.3f}, Semantic: {metadata['semantic_score']:.3f}"
-            )
-        print(f"   {res['document'][:100]}...")
-        print()
-
-
-def run_rrf_search(args: argparse.Namespace) -> None:
-    result = rrf_search_command(args.query, args.k, args.limit)
-    print(
-        f"Weighted Hybrid Search Results for '{result['query']}' (k={result['k']}):"
-    )
-    for i, res in enumerate(result["results"], 1):
-        print(f"{i}. {res['title']}")
-        print(f"   RRF Score: {res.get('score', 0):.3f}")
-        metadata = res.get("metadata", {})
-        if "bm25_score" in metadata and "semantic_score" in metadata:
-            print(
-                f"   BM25 Rank: {metadata['bm25_score']}, Semantic Rank: {metadata['semantic_score']}"
-            )
-        print(f"   {res['document'][:100]}...")
-        print()
+from lib.hybrid_search import (
+    normalize_command,
+    rrf_search_command,
+    weighted_search_command,
+)
 
 
 def main() -> None:
@@ -56,7 +17,7 @@ def main() -> None:
     normalize_parser.add_argument(
         "scores", nargs="+", type=float, help="List of scores to normalize"
     )
-    normalize_parser.set_defaults(func=run_normalize)
+    normalize_parser.set_defaults(func=lambda args: normalize_command(args.scores))
 
     weighted_parser = subparsers.add_parser(
         "weighted-search", help="Perform weighted hybrid search"
@@ -71,8 +32,10 @@ def main() -> None:
     weighted_parser.add_argument(
         "--limit", type=int, default=5, help="Number of results to return (default=5)"
     )
-    weighted_parser.set_defaults(func=run_weighted_search)
-    
+    weighted_parser.set_defaults(
+        func=lambda args: weighted_search_command(args.query, args.alpha, args.limit)
+    )
+
     rrf_parser = subparsers.add_parser(
         "rrf-search", help="Perform RRF hybrid search"
     )
@@ -86,7 +49,9 @@ def main() -> None:
     rrf_parser.add_argument(
         "--limit", type=int, default=5, help="Number of results to return (default=5)"
     )
-    rrf_parser.set_defaults(func=run_rrf_search)
+    rrf_parser.set_defaults(
+        func=lambda args: rrf_search_command(args.query, args.k, args.limit)
+    )
 
     args = parser.parse_args()
     if hasattr(args, "func"):

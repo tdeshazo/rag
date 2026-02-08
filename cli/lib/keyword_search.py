@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import math
 import os
 import string
@@ -19,6 +21,17 @@ from .search_utils import (
 
 
 class InvertedIndex:
+    __slots__ = (
+        "index",
+        "docmap",
+        "index_path",
+        "docmap_path",
+        "tf_path",
+        "doc_lengths_path",
+        "term_frequencies",
+        "doc_lengths",
+    )
+
     def __init__(self) -> None:
         self.index = defaultdict(set)
         self.docmap: dict[int, dict] = {}
