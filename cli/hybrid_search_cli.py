@@ -11,6 +11,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Hybrid Search CLI")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
+    # normalize
     normalize_parser = subparsers.add_parser(
         "normalize", help="Normalize a list of scores"
     )
@@ -19,6 +20,7 @@ def main() -> None:
     )
     normalize_parser.set_defaults(func=lambda args: normalize_command(args.scores))
 
+    # weighted-search
     weighted_parser = subparsers.add_parser(
         "weighted-search", help="Perform weighted hybrid search"
     )
@@ -36,6 +38,7 @@ def main() -> None:
         func=lambda args: weighted_search_command(args.query, args.alpha, args.limit)
     )
 
+    # rrf-search
     rrf_parser = subparsers.add_parser(
         "rrf-search", help="Perform RRF hybrid search"
     )
@@ -49,8 +52,14 @@ def main() -> None:
     rrf_parser.add_argument(
         "--limit", type=int, default=5, help="Number of results to return (default=5)"
     )
+    rrf_parser.add_argument(
+        "--enhance",
+        type=str,
+        choices=["spell", "rewrite", "expand"],
+        help="Query enhancement method",
+    )
     rrf_parser.set_defaults(
-        func=lambda args: rrf_search_command(args.query, args.k, args.limit)
+        func=lambda args: rrf_search_command(args.query, args.k, args.limit, args.enhance)
     )
 
     args = parser.parse_args()

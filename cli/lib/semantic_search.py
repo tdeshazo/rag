@@ -364,7 +364,7 @@ class ChunkedSemanticSearch(SemanticSearch):
             results.append({
                 "id": doc["id"],
                 "title": doc["title"],
-                "description": doc["description"][:DOCUMENT_PREVIEW_LENGTH],
+                "document": doc["description"][:DOCUMENT_PREVIEW_LENGTH],
                 "score": score,
             })
 

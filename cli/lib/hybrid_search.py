@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from typing import Optional
 
 from .keyword_search import InvertedIndex
+from .semantic_search import ChunkedSemanticSearch
+from .llm import LlmClient
 from .search_utils import (
     DEFAULT_ALPHA,
     DEFAULT_SEARCH_LIMIT,
     format_search_result,
     load_movies,
 )
-from .semantic_search import ChunkedSemanticSearch
 
 
 @dataclass(slots=True)
@@ -92,7 +94,6 @@ def combine_search_results(
 ) -> list[dict]:
     bm25_normalized = normalize_search_results(bm25_results)
     semantic_normalized = normalize_search_results(semantic_results)
-
     combined_scores: dict[int, HybridAccumulator] = {}
 
     for result in bm25_normalized:
@@ -102,7 +103,6 @@ def combine_search_results(
                 title=result["title"],
                 document=result["document"],
             )
-
         combined_scores[doc_id].bm25_score = max(
             combined_scores[doc_id].bm25_score, result["normalized_score"]
         )
@@ -114,7 +114,6 @@ def combine_search_results(
                 title=result["title"],
                 document=result["document"],
             )
-
         combined_scores[doc_id].semantic_score = max(
             combined_scores[doc_id].semantic_score, result["normalized_score"]
         )
@@ -204,9 +203,7 @@ def weighted_search_command(
 ) -> dict:
     movies = load_movies()
     searcher = HybridSearch(movies)
-
     original_query = query
-
     search_limit = limit
     results = searcher.weighted_search(query, alpha, search_limit)
     payload = {
@@ -235,13 +232,16 @@ def weighted_search_command(
 
 
 def rrf_search_command(
-    query: str, k: float = 60, limit: int = DEFAULT_SEARCH_LIMIT
+    query: str, k: float = 60, limit: int = DEFAULT_SEARCH_LIMIT, mode = ""
 ) -> dict:
+    
+    if mode != "":
+        client = LlmClient()
+        query = client.enhance(query, mode)
+
     movies = load_movies()
     searcher = HybridSearch(movies)
-
     original_query = query
-
     search_limit = limit
     results = searcher.rrf_search(query, k, search_limit)
     payload = {
